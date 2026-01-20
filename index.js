@@ -24,11 +24,19 @@ async function procesarItem(item, prompt) {
 
   try {
     // Obtener la API key en cada llamada (no al inicio)
-    const apiKey = process.env.OPENAI_API_KEY;
+    let apiKey = process.env.OPENAI_API_KEY;
     
     if (!apiKey) {
       throw new Error('OPENAI_API_KEY no está configurada');
     }
+
+    // Limpiar la clave: remover espacios y caracteres de escape
+    apiKey = apiKey.trim();
+    if (apiKey.startsWith('=')) {
+      apiKey = apiKey.substring(1);
+    }
+    
+    console.log(`DEBUG: API Key length: ${apiKey.length}, starts with: ${apiKey.substring(0, 10)}...`);
 
     // Crear cliente de OpenAI con la clave
     const openai = new OpenAI({
