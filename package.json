@@ -1,0 +1,29 @@
+{
+  "name": "chatgpt-worker-railway",
+  "version": "1.0.0",
+  "description": "Worker endpoint para procesar filas de Google Sheets con ChatGPT",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "chatgpt",
+    "openai",
+    "google-sheets",
+    "railway"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "openai": "^4.52.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

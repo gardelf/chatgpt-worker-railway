@@ -1,0 +1,17 @@
+{
+  "prompt": "Eres un especialista en análisis de contenido web para captación de leads. Analiza el siguiente contenido y proporciona: 1) Un análisis breve del contenido, 2) Una propuesta de comunicación personalizada, 3) Una recomendación de acción (contactar o revisión manual).",
+  "items": [
+    {
+      "row": 2,
+      "url": "https://reddit.com/r/MBA",
+      "keyword": "IE MBA",
+      "texto": "Usuario pregunta sobre programas de MBA en España. Menciona que está buscando información sobre IE Business School. Muestra interés en programas ejecutivos."
+    },
+    {
+      "row": 3,
+      "url": "https://facebook.com/groups/mba-spain",
+      "keyword": "IE MBA",
+      "texto": "Grupo de Facebook donde personas discuten sus experiencias en programas de MBA. Alguien pregunta específicamente sobre IE Business School y sus costos."
+    }
+  ]
+}
