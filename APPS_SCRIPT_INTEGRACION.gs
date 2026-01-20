@@ -1,23 +1,21 @@
 // ============================================================================
 // APPS SCRIPT - INTEGRACIÓN CON RAILWAY WORKER
 // ============================================================================
-// Este script lee filas pendientes de Google Sheets y las envía al endpoint
-// en Railway para procesamiento con ChatGPT.
+// LÓGICA CORRECTA:
+// - Busca filas donde estado_analisis está VACÍO (no enriquecidas)
+// - Envía el contenido de "resumen_chatgpt" a Railway
+// - Recibe análisis y lo guarda en las columnas correspondientes
+// - Marca estado_analisis como "analizada"
 // ============================================================================
 
-// ⚙️ CONFIGURACIÓN - ACTUALIZAR ESTOS VALORES
 const CONFIG = {
-  RAILWAY_ENDPOINT: 'https://chatgpt-worker-production-xxxx.up.railway.app', // Reemplazar con tu URL de Railway
+  RAILWAY_ENDPOINT: 'https://web-production-5cf4f.up.railway.app',
   SHEET_NAME: 'Historial_Resultados',
   PROMPT_SHEET: 'Prompt_ChatGPT',
 };
 
-// ============================================================================
-// FUNCIÓN PRINCIPAL
-// ============================================================================
-
 /**
- * Inicia el enriquecimiento enviando filas pendientes al worker de Railway
+ * Inicia el enriquecimiento de filas no analizadas
  * Ejecutar: iniciarEnriquecimiento()
  */
 function iniciarEnriquecimiento() {
@@ -27,24 +25,23 @@ function iniciarEnriquecimiento() {
     const sheet = SpreadsheetApp.getActiveSpreadsheet();
     const hojaHistorial = sheet.getSheetByName(CONFIG.SHEET_NAME);
     
-    // 1. Leer datos
     const datos = hojaHistorial.getDataRange().getValues();
     const headers = datos[0];
     
     // Encontrar índices de columnas
-    const idxEstado = headers.indexOf('estado');
+    const idxEstadoAnalisis = headers.indexOf('estado_analisis');
     const idxResumenChatGPT = headers.indexOf('resumen_chatgpt');
     const idxURL = headers.indexOf('url');
     const idxKeyword = headers.indexOf('keyword');
-    const idxAnalisis = headers.indexOf('analisis_resumen');
-    const idxPropuesta = headers.indexOf('propuesta_comunicativa');
-    const idxAccion = headers.indexOf('accion_recomendada');
+    const idxAnalisisResumen = headers.indexOf('analisis_resumen');
+    const idxPropuestaComunicativa = headers.indexOf('propuesta_comunicativa');
+    const idxAccionRecomendada = headers.indexOf('accion_recomendada');
     
-    if (idxEstado === -1 || idxResumenChatGPT === -1) {
-      throw new Error('Columnas requeridas no encontradas');
+    if (idxEstadoAnalisis === -1 || idxResumenChatGPT === -1) {
+      throw new Error('Columnas requeridas no encontradas: estado_analisis o resumen_chatgpt');
     }
     
-    // 2. Leer prompt
+    // Leer prompt
     const hojaPrompt = sheet.getSheetByName(CONFIG.PROMPT_SHEET);
     const prompt = hojaPrompt.getRange('A7').getValue();
     
@@ -52,16 +49,17 @@ function iniciarEnriquecimiento() {
       throw new Error('Prompt no encontrado en ' + CONFIG.PROMPT_SHEET + ' celda A7');
     }
     
-    // 3. Encontrar filas pendientes
+    // Encontrar filas NO ANALIZADAS (estado_analisis vacío)
     const items = [];
     
     for (let i = 1; i < datos.length; i++) {
-      const estado = datos[i][idxEstado];
+      const estadoAnalisis = datos[i][idxEstadoAnalisis];
       const contenido = datos[i][idxResumenChatGPT];
       const url = datos[i][idxURL];
       const keyword = datos[i][idxKeyword];
       
-      if (estado === 'pendiente' && contenido) {
+      // Condición: estado_analisis VACÍO Y contenido NO VACÍO
+      if (!estadoAnalisis && contenido) {
         items.push({
           row: i + 1,  // Número de fila en Google Sheets (1-indexed)
           url: url || '',
@@ -72,18 +70,13 @@ function iniciarEnriquecimiento() {
     }
     
     if (items.length === 0) {
-      Logger.log('⚠️ No hay filas pendientes');
+      Logger.log('⚠️ No hay filas pendientes de análisis');
       return;
     }
     
-    Logger.log(`📊 Encontradas ${items.length} filas pendientes`);
+    Logger.log(`📊 Encontradas ${items.length} filas pendientes de análisis`);
     
-    // 4. Marcar filas como "procesando"
-    for (const item of items) {
-      hojaHistorial.getRange(item.row, idxEstado + 1).setValue('procesando');
-    }
-    
-    // 5. Enviar al worker de Railway
+    // Enviar al worker de Railway
     Logger.log('📤 Enviando lote al worker de Railway...');
     const payload = {
       prompt: prompt,
@@ -105,16 +98,15 @@ function iniciarEnriquecimiento() {
       throw new Error(`Error del servidor (${responseCode}): ${responseText}`);
     }
     
-    // 6. Procesar respuesta
     const result = JSON.parse(responseText);
     
     if (!result.ok || !Array.isArray(result.results)) {
-      throw new Error('Respuesta inválida del servidor');
+      throw new Error('Respuesta inválida del servidor: ' + responseText);
     }
     
     Logger.log(`✅ Respuesta recibida con ${result.results.length} resultados`);
     
-    // 7. Actualizar Google Sheets con los resultados
+    // Actualizar Google Sheets con los resultados
     let contadorExitoso = 0;
     let contadorError = 0;
     
@@ -122,28 +114,27 @@ function iniciarEnriquecimiento() {
       const { row, analisis, propuesta, accion } = resultItem;
       
       try {
-        // Actualizar las columnas de resultado
-        if (idxAnalisis !== -1) {
-          hojaHistorial.getRange(row, idxAnalisis + 1).setValue(analisis);
+        // Actualizar columnas de resultado
+        if (idxAnalisisResumen !== -1 && analisis) {
+          hojaHistorial.getRange(row, idxAnalisisResumen + 1).setValue(analisis);
         }
-        if (idxPropuesta !== -1) {
-          hojaHistorial.getRange(row, idxPropuesta + 1).setValue(propuesta);
+        if (idxPropuestaComunicativa !== -1 && propuesta) {
+          hojaHistorial.getRange(row, idxPropuestaComunicativa + 1).setValue(propuesta);
         }
-        if (idxAccion !== -1) {
-          hojaHistorial.getRange(row, idxAccion + 1).setValue(accion);
+        if (idxAccionRecomendada !== -1 && accion) {
+          hojaHistorial.getRange(row, idxAccionRecomendada + 1).setValue(accion);
         }
         
-        // Actualizar estado
-        const nuevoEstado = accion === 'error' ? 'error' : 'procesada';
-        hojaHistorial.getRange(row, idxEstado + 1).setValue(nuevoEstado);
+        // Marcar como analizada
+        hojaHistorial.getRange(row, idxEstadoAnalisis + 1).setValue('analizada');
         
         if (accion === 'error') {
           contadorError++;
+          Logger.log(`⚠️ Fila ${row} procesada con error`);
         } else {
           contadorExitoso++;
+          Logger.log(`✅ Fila ${row} enriquecida correctamente`);
         }
-        
-        Logger.log(`✅ Fila ${row} actualizada (acción: ${accion})`);
       } catch (error) {
         Logger.log(`❌ Error actualizando fila ${row}: ${error.message}`);
         contadorError++;
@@ -151,7 +142,7 @@ function iniciarEnriquecimiento() {
     }
     
     Logger.log(`\n📈 RESUMEN:`);
-    Logger.log(`   ✅ Procesadas correctamente: ${contadorExitoso}`);
+    Logger.log(`   ✅ Enriquecidas correctamente: ${contadorExitoso}`);
     Logger.log(`   ❌ Con error: ${contadorError}`);
     Logger.log(`\n✨ Enriquecimiento completado`);
     
@@ -161,12 +152,8 @@ function iniciarEnriquecimiento() {
   }
 }
 
-// ============================================================================
-// FUNCIÓN: VERIFICAR PROGRESO
-// ============================================================================
-
 /**
- * Muestra el progreso del enriquecimiento
+ * Verifica el progreso del enriquecimiento
  * Ejecutar: verificarProgreso()
  */
 function verificarProgreso() {
@@ -175,72 +162,31 @@ function verificarProgreso() {
   
   const datos = hojaHistorial.getDataRange().getValues();
   const headers = datos[0];
-  const idxEstado = headers.indexOf('estado');
+  const idxEstadoAnalisis = headers.indexOf('estado_analisis');
   
-  if (idxEstado === -1) {
-    Logger.log('❌ Columna "estado" no encontrada');
+  if (idxEstadoAnalisis === -1) {
+    Logger.log('❌ Columna "estado_analisis" no encontrada');
     return;
   }
   
   let pendientes = 0;
-  let procesando = 0;
-  let procesadas = 0;
-  let errores = 0;
+  let analizadas = 0;
   
   for (let i = 1; i < datos.length; i++) {
-    const estado = datos[i][idxEstado];
+    const estadoAnalisis = datos[i][idxEstadoAnalisis];
     
-    if (estado === 'pendiente') pendientes++;
-    else if (estado === 'procesando') procesando++;
-    else if (estado === 'procesada') procesadas++;
-    else if (estado === 'error') errores++;
-  }
-  
-  Logger.log(`\n📊 PROGRESO DEL ENRIQUECIMIENTO:`);
-  Logger.log(`   ⏳ Pendientes: ${pendientes}`);
-  Logger.log(`   🔄 Procesando: ${procesando}`);
-  Logger.log(`   ✅ Procesadas: ${procesadas}`);
-  Logger.log(`   ❌ Errores: ${errores}`);
-  Logger.log(`   📈 Total: ${pendientes + procesando + procesadas + errores}`);
-}
-
-// ============================================================================
-// FUNCIÓN: REINTENTRAR ERRORES
-// ============================================================================
-
-/**
- * Reintenta las filas que tuvieron error
- * Ejecutar: reintentarErrores()
- */
-function reintentarErrores() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet();
-  const hojaHistorial = sheet.getSheetByName(CONFIG.SHEET_NAME);
-  
-  const datos = hojaHistorial.getDataRange().getValues();
-  const headers = datos[0];
-  const idxEstado = headers.indexOf('estado');
-  
-  if (idxEstado === -1) {
-    Logger.log('❌ Columna "estado" no encontrada');
-    return;
-  }
-  
-  let contadorReintentos = 0;
-  
-  for (let i = 1; i < datos.length; i++) {
-    if (datos[i][idxEstado] === 'error') {
-      hojaHistorial.getRange(i + 1, idxEstado + 1).setValue('pendiente');
-      contadorReintentos++;
+    if (!estadoAnalisis) {
+      pendientes++;
+    } else if (estadoAnalisis === 'analizada') {
+      analizadas++;
     }
   }
   
-  Logger.log(`🔄 ${contadorReintentos} filas marcadas para reintentar`);
-  Logger.log(`   Ejecuta: iniciarEnriquecimiento()`);
+  Logger.log(`\n📊 PROGRESO DEL ENRIQUECIMIENTO:`);
+  Logger.log(`   ⏳ Pendientes de análisis: ${pendientes}`);
+  Logger.log(`   ✅ Analizadas: ${analizadas}`);
+  Logger.log(`   📈 Total: ${pendientes + analizadas}`);
 }
-
-// ============================================================================
-// FUNCIÓN: TEST DE CONEXIÓN
-// ============================================================================
 
 /**
  * Testa la conexión con el endpoint de Railway
@@ -250,13 +196,13 @@ function testConexion() {
   Logger.log('🧪 Testeando conexión con Railway...');
   
   const testPayload = {
-    prompt: 'Responde con un JSON: {"test": "ok"}',
+    prompt: 'Eres un asistente de análisis. Responde brevemente sobre el contenido.',
     items: [
       {
         row: 999,
         url: 'https://example.com',
         keyword: 'test',
-        texto: 'Este es un mensaje de prueba'
+        texto: 'Este es un mensaje de prueba para verificar que el endpoint funciona correctamente.'
       }
     ]
   };
@@ -277,11 +223,41 @@ function testConexion() {
     Logger.log(`Response: ${responseText}`);
     
     if (responseCode === 200) {
-      Logger.log('✅ Conexión exitosa');
+      const result = JSON.parse(responseText);
+      if (result.ok) {
+        Logger.log('✅ Conexión exitosa - Endpoint funcionando correctamente');
+      } else {
+        Logger.log('⚠️ Respuesta recibida pero con error: ' + result.error);
+      }
     } else {
-      Logger.log('❌ Error en la conexión');
+      Logger.log('❌ Error en la conexión (código ' + responseCode + ')');
     }
   } catch (error) {
     Logger.log(`❌ Error: ${error.message}`);
   }
+}
+
+/**
+ * Limpiar estado_analisis para reintentar (solo para testing)
+ * Ejecutar: limpiarEstadoAnalisis()
+ */
+function limpiarEstadoAnalisis() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet();
+  const hojaHistorial = sheet.getSheetByName(CONFIG.SHEET_NAME);
+  
+  const datos = hojaHistorial.getDataRange().getValues();
+  const headers = datos[0];
+  const idxEstadoAnalisis = headers.indexOf('estado_analisis');
+  
+  if (idxEstadoAnalisis === -1) {
+    Logger.log('❌ Columna "estado_analisis" no encontrada');
+    return;
+  }
+  
+  // Limpiar estado_analisis (dejar vacío)
+  for (let i = 1; i < datos.length; i++) {
+    hojaHistorial.getRange(i + 1, idxEstadoAnalisis + 1).setValue('');
+  }
+  
+  Logger.log(`🧹 Estado_analisis limpiado - todas las filas listas para análisis`);
 }
