@@ -32,11 +32,19 @@ async function procesarItem(item, prompt) {
 
     // Limpiar la clave: remover espacios y caracteres de escape
     apiKey = apiKey.trim();
-    if (apiKey.startsWith('=')) {
+    
+    // Railway a veces agrega '=' al inicio de las variables
+    while (apiKey.startsWith('=')) {
       apiKey = apiKey.substring(1);
     }
     
-    console.log(`DEBUG: API Key length: ${apiKey.length}, starts with: ${apiKey.substring(0, 10)}...`);
+    // Extraer solo la parte que empieza con 'sk-'
+    const skMatch = apiKey.match(/sk-[a-zA-Z0-9_-]+/);
+    if (skMatch) {
+      apiKey = skMatch[0];
+    }
+    
+    console.log(`DEBUG: API Key length: ${apiKey.length}, starts with: ${apiKey.substring(0, 10)}..., ends with: ...${apiKey.substring(apiKey.length - 10)}`);
 
     // Crear cliente de OpenAI con la clave
     const openai = new OpenAI({
