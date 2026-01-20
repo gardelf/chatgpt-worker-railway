@@ -31,7 +31,9 @@ async function procesarItem(item, prompt) {
     }
 
     // Crear cliente de OpenAI con la clave
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({
+      apiKey: apiKey
+    });
 
     // 1. Construir el mensaje para el usuario
     const userMessage = `URL: ${url}\nKEYWORD: ${keyword}\nCONTENIDO: ${texto}`;
