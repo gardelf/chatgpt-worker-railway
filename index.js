@@ -48,36 +48,75 @@ async function procesarItem(item, prompt) {
 
     const responseText = completion.choices[0].message.content;
 
-    // 3. Interpretar la respuesta de la IA.
-    // Para este caso, la respuesta completa se asigna a ambos campos.
-    // Se podría mejorar con un parsing más robusto si ChatGPT devolviera un JSON.
-    const analisis = responseText;
-    const propuesta = responseText;
-
-    // 4. Determinar la acción recomendada
-    let accion = 'revision_manual';
-    const lowerCaseResponse = responseText.toLowerCase();
-    if (lowerCaseResponse.includes('dm') || lowerCaseResponse.includes('mensaje') || lowerCaseResponse.includes('contactar')) {
-      accion = 'contactar';
+    // 3. Parsear la respuesta JSON de ChatGPT
+    let parsedResponse = {};
+    
+    try {
+      // Intentar parsear como JSON
+      parsedResponse = JSON.parse(responseText);
+    } catch (parseError) {
+      // Si no es JSON válido, intentar extraer JSON del texto
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsedResponse = JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          console.warn(`⚠️ No se pudo parsear JSON para fila ${row}. Usando respuesta como texto.`);
+          parsedResponse = {
+            analisis_resumen: responseText,
+            propuesta_comunicativa: responseText,
+            accion_recomendada: 'revision_manual',
+            estado_analisis: 'analizada'
+          };
+        }
+      } else {
+        // Si no hay JSON, usar la respuesta completa
+        parsedResponse = {
+          analisis_resumen: responseText,
+          propuesta_comunicativa: responseText,
+          accion_recomendada: 'revision_manual',
+          estado_analisis: 'analizada'
+        };
+      }
     }
 
-    // 5. Devolver el resultado estructurado para esta fila
-    console.log(`✅ Fila ${row} procesada correctamente.`);
-    return {
+    // 4. Validar y extraer los campos esperados
+    const resultado = {
       row,
-      analisis: analisis,
-      propuesta: propuesta,
-      accion: accion,
+      url: parsedResponse.url || url,
+      titulo_pagina: parsedResponse.titulo_pagina || '',
+      keyword_origen: parsedResponse.keyword_origen || keyword,
+      tipo_resultado: parsedResponse.tipo_resultado || '',
+      relevancia_futura: parsedResponse.relevancia_futura || '',
+      analisis_resumen: parsedResponse.analisis_resumen || '',
+      propuesta_comunicativa: parsedResponse.propuesta_comunicativa || '',
+      accion_recomendada: parsedResponse.accion_recomendada || 'revision_manual',
+      estado_analisis: parsedResponse.estado_analisis || 'analizada'
     };
+
+    // 5. Validar que accion_recomendada sea uno de los valores permitidos
+    const accionesValidas = ['contacto_directo', 'insight', 'descartado', 'contactar', 'revision_manual', 'error'];
+    if (!accionesValidas.includes(resultado.accion_recomendada)) {
+      resultado.accion_recomendada = 'revision_manual';
+    }
+
+    console.log(`✅ Fila ${row} procesada correctamente.`);
+    return resultado;
 
   } catch (error) {
     console.error(`❌ Error procesando la fila ${row}:`, error.message);
-    // 6. Devolver un objeto de error si algo falla para no detener el lote
+    // Devolver un objeto de error si algo falla para no detener el lote
     return {
       row,
-      analisis: `Error: ${error.message}`,
-      propuesta: `Error: ${error.message}`,
-      accion: 'error',
+      url: url || '',
+      titulo_pagina: '',
+      keyword_origen: keyword || '',
+      tipo_resultado: '',
+      relevancia_futura: '',
+      analisis_resumen: `Error: ${error.message}`,
+      propuesta_comunicativa: `Error: ${error.message}`,
+      accion_recomendada: 'error',
+      estado_analisis: 'analizada'
     };
   }
 }
