@@ -4,8 +4,9 @@
 // LÓGICA CORRECTA:
 // - Busca filas donde estado_analisis está VACÍO (no enriquecidas)
 // - Envía el contenido de "resumen_chatgpt" a Railway
-// - Recibe análisis y lo guarda en las columnas correspondientes
-// - Marca estado_analisis como "analizada"
+// - Recibe JSON con todos los campos analizados
+// - Actualiza: analisis_resumen, propuesta_comunicativa, accion_recomendada, 
+//   tipo_resultado, relevancia_futura, estado_analisis
 // ============================================================================
 
 const CONFIG = {
@@ -28,14 +29,18 @@ function iniciarEnriquecimiento() {
     const datos = hojaHistorial.getDataRange().getValues();
     const headers = datos[0];
     
-    // Encontrar índices de columnas
+    // Encontrar índices de columnas - ENTRADA
     const idxEstadoAnalisis = headers.indexOf('estado_analisis');
     const idxResumenChatGPT = headers.indexOf('resumen_chatgpt');
     const idxURL = headers.indexOf('url');
     const idxKeyword = headers.indexOf('keyword');
+    
+    // Encontrar índices de columnas - SALIDA
     const idxAnalisisResumen = headers.indexOf('analisis_resumen');
     const idxPropuestaComunicativa = headers.indexOf('propuesta_comunicativa');
     const idxAccionRecomendada = headers.indexOf('accion_recomendada');
+    const idxTipoResultado = headers.indexOf('tipo_resultado');
+    const idxRelevanciaFutura = headers.indexOf('relevancia_futura');
     
     if (idxEstadoAnalisis === -1 || idxResumenChatGPT === -1) {
       throw new Error('Columnas requeridas no encontradas: estado_analisis o resumen_chatgpt');
@@ -111,24 +116,31 @@ function iniciarEnriquecimiento() {
     let contadorError = 0;
     
     for (const resultItem of result.results) {
-      const { row, analisis, propuesta, accion } = resultItem;
+      const { row, analisis_resumen, propuesta_comunicativa, accion_recomendada, 
+              tipo_resultado, relevancia_futura, estado_analisis } = resultItem;
       
       try {
         // Actualizar columnas de resultado
-        if (idxAnalisisResumen !== -1 && analisis) {
-          hojaHistorial.getRange(row, idxAnalisisResumen + 1).setValue(analisis);
+        if (idxAnalisisResumen !== -1 && analisis_resumen) {
+          hojaHistorial.getRange(row, idxAnalisisResumen + 1).setValue(analisis_resumen);
         }
-        if (idxPropuestaComunicativa !== -1 && propuesta) {
-          hojaHistorial.getRange(row, idxPropuestaComunicativa + 1).setValue(propuesta);
+        if (idxPropuestaComunicativa !== -1 && propuesta_comunicativa) {
+          hojaHistorial.getRange(row, idxPropuestaComunicativa + 1).setValue(propuesta_comunicativa);
         }
-        if (idxAccionRecomendada !== -1 && accion) {
-          hojaHistorial.getRange(row, idxAccionRecomendada + 1).setValue(accion);
+        if (idxAccionRecomendada !== -1 && accion_recomendada) {
+          hojaHistorial.getRange(row, idxAccionRecomendada + 1).setValue(accion_recomendada);
+        }
+        if (idxTipoResultado !== -1 && tipo_resultado) {
+          hojaHistorial.getRange(row, idxTipoResultado + 1).setValue(tipo_resultado);
+        }
+        if (idxRelevanciaFutura !== -1 && relevancia_futura) {
+          hojaHistorial.getRange(row, idxRelevanciaFutura + 1).setValue(relevancia_futura);
         }
         
         // Marcar como analizada
-        hojaHistorial.getRange(row, idxEstadoAnalisis + 1).setValue('analizada');
+        hojaHistorial.getRange(row, idxEstadoAnalisis + 1).setValue(estado_analisis || 'analizada');
         
-        if (accion === 'error') {
+        if (accion_recomendada === 'error') {
           contadorError++;
           Logger.log(`⚠️ Fila ${row} procesada con error`);
         } else {
@@ -163,6 +175,7 @@ function verificarProgreso() {
   const datos = hojaHistorial.getDataRange().getValues();
   const headers = datos[0];
   const idxEstadoAnalisis = headers.indexOf('estado_analisis');
+  const idxResumenChatGPT = headers.indexOf('resumen_chatgpt');
   
   if (idxEstadoAnalisis === -1) {
     Logger.log('❌ Columna "estado_analisis" no encontrada');
@@ -174,11 +187,15 @@ function verificarProgreso() {
   
   for (let i = 1; i < datos.length; i++) {
     const estadoAnalisis = datos[i][idxEstadoAnalisis];
+    const contenido = datos[i][idxResumenChatGPT];
     
-    if (!estadoAnalisis) {
-      pendientes++;
-    } else if (estadoAnalisis === 'analizada') {
-      analizadas++;
+    // Solo contar filas que tienen contenido
+    if (contenido) {
+      if (!estadoAnalisis) {
+        pendientes++;
+      } else if (estadoAnalisis === 'analizada') {
+        analizadas++;
+      }
     }
   }
   
@@ -196,7 +213,7 @@ function testConexion() {
   Logger.log('🧪 Testeando conexión con Railway...');
   
   const testPayload = {
-    prompt: 'Eres un asistente de análisis. Responde brevemente sobre el contenido.',
+    prompt: 'Responde en JSON con: {"analisis_resumen": "Test OK", "propuesta_comunicativa": "Test", "accion_recomendada": "contacto_directo", "tipo_resultado": "insight", "relevancia_futura": "alta", "estado_analisis": "analizada"}',
     items: [
       {
         row: 999,
@@ -226,6 +243,16 @@ function testConexion() {
       const result = JSON.parse(responseText);
       if (result.ok) {
         Logger.log('✅ Conexión exitosa - Endpoint funcionando correctamente');
+        Logger.log('📊 Estructura de respuesta:');
+        if (result.results && result.results.length > 0) {
+          const firstResult = result.results[0];
+          Logger.log('   - analisis_resumen: ' + (firstResult.analisis_resumen ? '✅' : '❌'));
+          Logger.log('   - propuesta_comunicativa: ' + (firstResult.propuesta_comunicativa ? '✅' : '❌'));
+          Logger.log('   - accion_recomendada: ' + (firstResult.accion_recomendada ? '✅' : '❌'));
+          Logger.log('   - tipo_resultado: ' + (firstResult.tipo_resultado ? '✅' : '❌'));
+          Logger.log('   - relevancia_futura: ' + (firstResult.relevancia_futura ? '✅' : '❌'));
+          Logger.log('   - estado_analisis: ' + (firstResult.estado_analisis ? '✅' : '❌'));
+        }
       } else {
         Logger.log('⚠️ Respuesta recibida pero con error: ' + result.error);
       }
